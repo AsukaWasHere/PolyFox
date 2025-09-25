@@ -1,7 +1,0 @@
-fastapi
-uvicorn[standard]
-pydantic
-gunicorn
-python-dotenv
-requests
-boto3

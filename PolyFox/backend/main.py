@@ -140,5 +140,47 @@ def plot_analysis_graph(graph_data: dict):
         buf = io.BytesIO()
         plt.savefig(buf, format='png', transparent=True)
         buf.seek(0)
-        image_base64 = base64.b
+        image_base64 = base64.b64encode(buf.read()).decode('utf-8')
+        plt.close(fig)
+        return f"data:image/png;base64,{image_base64}"
+    except Exception as e:
+        print(f"Error plotting graph: {e}")
+        return None
+
+# --- API ENDPOINTS ---
+@app.get("/")
+def read_root():
+    return {"status": "ok", "message": "PolyFox AI Financial Advisor backend is running."}
+
+@app.post("/api/analyze")
+def analyze_profile(profile: UserProfile, db: Session = Depends(get_db)):
+    """Orchestrates data retrieval, AI analysis, graph generation, and saves to the database."""
+    api_key = os.getenv("FINANCIAL_DATA_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="Financial data API key is not configured.")
+    
+    historical_data = get_historical_market_data(api_key)
+    ai_analysis = get_analysis_and_graph_data_from_nova(profile, historical_data)
+    graph_b64 = plot_analysis_graph(ai_analysis.get("graph_data", {}))
+
+    db_request = AnalysisRequest(
+        age=profile.age,
+        income=profile.income,
+        goals=profile.goals,
+        current_investments=profile.current_investments,
+        opportunity=ai_analysis.get("opportunity"),
+        risk_assessment=ai_analysis.get("risk_assessment"),
+        suggested_action=ai_analysis.get("suggested_action"),
+        graph_b64=graph_b64
+    )
+    db.add(db_request)
+    db.commit()
+    
+    full_response = {
+        "summary": f"Personalized analysis for a {profile.age}-year-old.",
+        **ai_analysis,
+        "graph": graph_b64
+    }
+    
+    return {"status": "success", "insight": full_response}
 
